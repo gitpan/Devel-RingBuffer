@@ -1,0 +1,11 @@
+Changes.txt
+MANIFEST
+Makefile.PL
+lib/Devel/RingBuffer.pm
+lib/Devel/RingBuffer/Ring.pm
+t/01basic.t
+t/02multithread.t
+t/03multiproc.t
+t/04mtmp.t
+RingBuffer.xs
+ringbuffer.h
