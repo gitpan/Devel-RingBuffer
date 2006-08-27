@@ -2,6 +2,8 @@
 #	Devel::RingBuffer test script
 #
 use vars qw($tests $loaded);
+use Config;
+
 BEGIN {
 	push @INC, './t';
 	$tests = 5;
@@ -9,6 +11,11 @@ BEGIN {
 	$^W= 1;
 	$| = 1;
 	print "1..$tests\n";
+	unless ($Config{useithreads} && (!$ENV{DEVEL_RINGBUF_NOTHREADS})) {
+		print STDOUT "ok $_ # skip your Perl doesn't support threads for multithreaded, single process\n"
+			foreach (1..5);
+		exit;
+	}
 }
 
 END {print "not ok 1\n" unless $loaded;}

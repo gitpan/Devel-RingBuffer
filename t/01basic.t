@@ -27,8 +27,7 @@ END {print "not ok 1\n" unless $loaded;}
 #	10. Repeat all using processes
 #	11. Repeat all using threads in processes
 #
-use threads;
-use threads::shared;
+use Config;
 use Time::HiRes qw(time);
 use Devel::RingBuffer;
 
@@ -98,7 +97,8 @@ my $ok = 1;
 foreach (@rings) {
 	my ($pid, $tid, $current, $depth) = $_->getHeader();
 	$ok = undef, last
-		unless (defined($pid) && defined($tid) && ($pid == $$) && ($tid == threads->self()->tid()));
+		unless (defined($pid) && defined($tid) && ($pid == $$) && ($tid == 0));
+#		unless (defined($pid) && defined($tid) && ($pid == $$) && ($tid == threads->tid()));
 }
 report_result(\$testno, $ok, 'get headers');
 #
@@ -123,7 +123,8 @@ foreach my $r (@rings) {
 
 	$ok = undef, last
 		unless defined($pid) && defined($tid) && defined($slot) && defined($depth) &&
-			($pid == $$) && ($tid == threads->self->tid) && ($depth == 4) && ($slot == 3);
+			($pid == $$) && ($tid == 0) && ($depth == 4) && ($slot == 3);
+#			($pid == $$) && ($tid == threads->tid()) && ($depth == 4) && ($slot == 3);
 
 	foreach (0..3) {
 		my ($line, $timest, $entry) = $r->getSlot($_);
@@ -162,8 +163,8 @@ foreach (@rings) {
 	my ($pid, $tid, $slot, $depth) = $_->getHeader();
 	$ok = undef, last
 		unless defined($pid) && defined($tid) && defined($slot) && defined($depth) &&
-			($pid == $$) && ($tid == threads->self()->tid()) && ($slot == 1) &&
-				($depth == 2);
+			($pid == $$) && ($tid == 0) && ($slot == 1) && ($depth == 2);
+#			($pid == $$) && ($tid == threads->tid()) && ($slot == 1) && ($depth == 2);
 }
 report_result(\$testno, $ok, 'freed slots');
 #
@@ -283,26 +284,13 @@ else {
 #	set and get a global msg
 #	use separate thread to read so we don't get hung
 #
-my $global : shared;
-my $thrd = threads->create(\&readGlobal);
-
-my $result = $ring->setGlobalMsg('A' x 10000);
-report_result(\$testno, $result, 'set global msg');
-#
-#	wait for thread
-#	NOTE: join() seems to hang in some instances, so we'll sleep
-#
-#$thrd->join();
-sleep 1;
-
-report_result(\$testno, defined($global) &&
-	(length($global) == 10000) && ($global eq ('A' x 10000)),
-	'get global msg');
-
+if ($Config{useithreads} && (!$ENV{DEVEL_RINGBUF_NOTHREADS})) {
+	require ThreadFacade;
+	ThreadFacade::run($ring, \$testno, \&report_result);
+}
+else {
+	report_result(\$testno, 'skip', "your Perl doesn't support threads");
+	report_result(\$testno, 'skip', "your Perl doesn't support threads");
+}
 #$ring->close();
 
-sub readGlobal {
-	$global = $ring->getGlobalMsg();
-#	print STDERR "Thread read the msg of length ", length($global), "\n";
-	return length($global);
-}

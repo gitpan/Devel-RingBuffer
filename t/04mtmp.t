@@ -60,6 +60,12 @@ sub report_result {
 
 my $testno = 1;
 $loaded = 1;
+unless ($Config{useithreads} && ($Config{useithreads} eq 'define') &&
+	(!$ENV{DEVEL_RINGBUF_NOTHREADS})) {
+	report_result(\$testno, 'skip', "This Perl is not configured to support threads.")
+		foreach ($testno..$tests);
+	exit;
+}
 report_result(\$testno, 1, 'load');
 
 if ($^O eq 'MSWin32') {
@@ -68,11 +74,6 @@ if ($^O eq 'MSWin32') {
 	exit;
 }
 
-unless ($Config{useithreads} && ($Config{useithreads} eq 'define')) {
-	report_result(\$testno, 'skip', "This Perl is not configured to support threads.")
-		foreach ($testno..$tests);
-	exit 1;
-}
 #
 #	create a ring buffer using defaults
 #

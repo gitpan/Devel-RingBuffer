@@ -19,8 +19,9 @@
 package Devel::RingBuffer;
 
 use Carp qw(cluck carp confess);
-use threads;
-use threads::shared;
+#use threads;
+#use threads::shared;
+use Config;
 use IPC::Mmap;
 use DynaLoader;
 use Exporter;
@@ -124,16 +125,26 @@ Exporter::export_tags(keys %EXPORT_TAGS);
 
 };
 
+our $VERSION = '0.31';
+our $hasThreads;
+
+BEGIN {
+	if ($Config{useithreads} && (!$ENV{DEVEL_RINGBUF_NOTHREADS})) {
+		require Devel::RingBuffer::ThreadFacade;
+		$hasThreads = 1;
+	}
+}
+
+use threads::shared;
+
 use strict;
 use warnings;
-
-our $VERSION = '0.30';
 
 bootstrap Devel::RingBuffer $VERSION;
 
 use Devel::RingBuffer::Ring;
 
-our $thrdlock : shared;
+our $thrdlock = undef;
 
 #/**
 # Constructor. Using a combination of the optional C<%args> and
@@ -209,7 +220,7 @@ sub new {
 		$ringcount,
 		$ringbufsz,
 		$ringslots,
-		threads->self()->tid(),
+		($hasThreads ? Devel::RingBuffer::ThreadFacade->tid() : 0),
 		$$,
 		undef,
 		undef,
@@ -243,6 +254,13 @@ sub new {
 		$self->[RINGBUF_RING] = IPC::Mmap->new($file, $ringsize,
 			PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FILE)
 			or die "Can't open mmap file $file: $!";
+	}
+#
+#	share the thrdlock
+#
+	if ($hasThreads) {
+#		print STDERR "we're shared\n";
+		share($thrdlock);
 	}
 #
 #	clear the ringbuffer (Win32 needs this)
@@ -318,7 +336,7 @@ sub allocate {
 		$self->[RINGBUF_RING] = IPC::Mmap->new($file, $ringsize,
 			PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FILE) ||
 			die "Can't mmap file $file: $!";
-		$self->[RINGBUF_FLD_TID] = threads->self()->tid();
+		$self->[RINGBUF_FLD_TID] = ($hasThreads ? Devel::RingBuffer::ThreadFacade->tid() : 0);
 		$self->[RINGBUF_FLD_PID] = $$;
 	}
 	}
@@ -449,7 +467,7 @@ sub _lcl_open {
 		$count,
 		$ringbufsz,
 		$slots,
-		threads->self()->tid(),
+		($hasThreads ? Devel::RingBuffer::ThreadFacade->tid() : 0),
 		$$,
 		$ringbuffer,
 		undef,
@@ -595,7 +613,7 @@ sub getMmap { return $_[0]->[RINGBUF_RING]; }
 #
 sub OLDDESTROY {
 	my $self = shift;
-	my $tid = threads->self()->tid();
+	my $tid = ($hasThreads ? Devel::RingBuffer::ThreadFacade->tid() : 0);
 
 	return unless $self->[RINGBUF_RING];
 

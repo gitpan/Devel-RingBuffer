@@ -19,8 +19,7 @@
 #*/
 package	Devel::RingBuffer::Ring;
 
-use threads;
-use threads::shared;
+#use threads;
 use Time::HiRes qw(time);
 use Exporter;
 
@@ -64,13 +63,23 @@ Exporter::export_tags(keys %EXPORT_TAGS);
 
 };
 
+use Config;
 use Devel::RingBuffer;	# to bootstrap
 use Devel::RingBuffer qw(:ringbuffer_consts);
+
+our $hasThreads;
+
+BEGIN {
+	if ($Config{useithreads} && (!$ENV{DEVEL_RINGBUF_NOTHREADS})) {
+		require Devel::RingBuffer::ThreadFacade;
+		$hasThreads = 1;
+	}
+}
 
 use strict;
 use warnings;
 
-our $VERSION = '0.30';
+our $VERSION = '0.31';
 #/**
 # Constructor. Allocates a ring buffer, and initializes its header
 # and control variables.
@@ -87,7 +96,7 @@ our $VERSION = '0.30';
 sub new {
 	my ($class, $ringbuffer, $ringaddr, $baseaddr, $ringnum, $slots, $msgareasz) = @_;
 
-	my $tid = threads->self->tid;
+	my $tid = ($hasThreads ? Devel::RingBuffer::ThreadFacade->tid() : 0);
 	_init_ring($ringaddr, $$, $tid, $baseaddr);
 
 	return bless [
@@ -114,7 +123,7 @@ sub new {
 sub clone {
 	my $self = shift;
 
-	my $tid = threads->self->tid;
+	my $tid = ($hasThreads ? Devel::RingBuffer::ThreadFacade->tid() : 0);
 	my ($ringnum, $ringaddr) = $self->[RINGBUF_RING_BUFFER]->reallocate();
 	return undef unless defined($ringnum);
 	$self->[RINGBUF_RING_ADDR] = $ringaddr;
@@ -445,9 +454,10 @@ sub DESTROY {
 #		($_[0]->[RINGBUF_RING_TID] == threads->self()->tid());
 	return unless defined($_[0]->[RINGBUF_RING_BUFFER]);
 	my @hdr = _get_header($_[0]->[RINGBUF_RING_ADDR]);
+	my $tid = ($hasThreads ? Devel::RingBuffer::ThreadFacade->tid() : 0);
 
 	return
-		unless ($hdr[0] == $$) && ($hdr[1] == threads->self()->tid());
+		unless ($hdr[0] == $$) && ($hdr[1] == $tid);
 	$_[0]->[RINGBUF_RING_BUFFER]->free($_[0]->[RINGBUF_RING_INDEX]);
 }
 
